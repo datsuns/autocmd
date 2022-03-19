@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"flag"
+	"io"
 	"io/fs"
 	"log"
 	"os/exec"
@@ -16,38 +17,66 @@ const (
 	delayToReadd = time.Millisecond * 200
 )
 
+var (
+	Verbose = false
+)
+
 type Option struct {
+	v bool
 	p string
 	c string
 	a []string
 }
 
+func runlog(v ...interface{}) {
+	if Verbose == false {
+		return
+	}
+	log.Println(v...)
+}
+
+func mylog(v ...interface{}) {
+	log.Println(v...)
+}
+
 func parse_option() (ret *Option) {
 	ret = &Option{}
+	flag.BoolVar(&ret.v, "v", false, "verbose")
 	flag.StringVar(&ret.p, "p", ".", "path to watch")
 	flag.Parse()
 	ret.c = flag.Args()[0]
 	ret.a = flag.Args()[1:]
+	Verbose = ret.v
+	return ret
+}
+
+func printer(reader io.ReadCloser, done chan bool) string {
+	ret := ""
+	scanner := bufio.NewScanner(reader)
+	go func() {
+		for scanner.Scan() {
+			log.Printf(scanner.Text())
+			ret += scanner.Text() + "\n"
+		}
+		done <- true
+	}()
 	return ret
 }
 
 func execute(c string, p ...string) (result string) {
 	cmd := exec.Command(c, p...)
-	reader, _ := cmd.StdoutPipe()
-	scanner := bufio.NewScanner(reader)
-	done := make(chan bool)
-	go func() {
-		for scanner.Scan() {
-			log.Printf(scanner.Text())
-			result += scanner.Text() + "\n"
-		}
-		done <- true
-	}()
+	reader_o, _ := cmd.StdoutPipe()
+	reader_e, _ := cmd.StderrPipe()
+	done_o := make(chan bool)
+	done_e := make(chan bool)
+	printer(reader_o, done_o)
+	printer(reader_e, done_e)
 	cmd.Start()
-	<-done
+	<-done_o
+	<-done_e
 	err := cmd.Wait()
 	if err != nil {
-		log.Println("ERR: ", err)
+		mylog("ERR: ", err)
 	}
 	return result
 }
@@ -62,7 +91,7 @@ func gen_watcher(root string) (w *fsnotify.Watcher) {
 		if info == nil || info.IsDir() {
 			return nil
 		}
-		log.Println("add : ", path)
+		runlog("add : ", path)
 		err = w.Add(path)
 		if err != nil {
 			return err
@@ -82,12 +111,12 @@ func watch_main(w *fsnotify.Watcher, cmd string, args []string) {
 			if !ok {
 				return
 			}
-			log.Println("event:", event)
+			mylog("event:", event)
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				log.Println("modified file:", event.Name)
+				runlog("modified file:", event.Name)
 				execute(cmd, args...)
 			} else if event.Op&fsnotify.Remove == fsnotify.Remove {
-				log.Println("removed file:", event.Name)
+				runlog("removed file:", event.Name)
 				time.Sleep(delayToReadd)
 				w.Add(event.Name)
 				execute(cmd, args...)
@@ -96,7 +125,7 @@ func watch_main(w *fsnotify.Watcher, cmd string, args []string) {
 			if !ok {
 				return
 			}
-			log.Println("error:", err)
+			mylog("error:", err)
 		}
 	}
 }
