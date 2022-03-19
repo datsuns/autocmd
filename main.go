@@ -8,6 +8,8 @@ import (
 	"log"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -26,6 +28,32 @@ type Option struct {
 	p string
 	c string
 	a []string
+	e []string
+}
+
+type arrayFlags []string
+
+func (a *arrayFlags) String() string {
+	return strings.Join(*a, ",")
+}
+
+func (a *arrayFlags) Set(value string) error {
+	*a = append(*a, value)
+	return nil
+}
+
+func parse_option() (ret *Option) {
+	var excludes arrayFlags
+	ret = &Option{}
+	flag.BoolVar(&ret.v, "v", false, "verbose")
+	flag.StringVar(&ret.p, "p", ".", "path to watch")
+	flag.Var(&excludes, "e", "exclude pattern")
+	flag.Parse()
+	ret.c = flag.Args()[0]
+	ret.a = flag.Args()[1:]
+	ret.e = excludes
+	Verbose = ret.v
+	return ret
 }
 
 func runlog(v ...interface{}) {
@@ -37,17 +65,6 @@ func runlog(v ...interface{}) {
 
 func mylog(v ...interface{}) {
 	log.Println(v...)
-}
-
-func parse_option() (ret *Option) {
-	ret = &Option{}
-	flag.BoolVar(&ret.v, "v", false, "verbose")
-	flag.StringVar(&ret.p, "p", ".", "path to watch")
-	flag.Parse()
-	ret.c = flag.Args()[0]
-	ret.a = flag.Args()[1:]
-	Verbose = ret.v
-	return ret
 }
 
 func printer(reader io.ReadCloser, done chan bool) string {
@@ -81,15 +98,25 @@ func execute(c string, p ...string) (result string) {
 	return result
 }
 
-func gen_watcher(root string) (w *fsnotify.Watcher) {
+func gen_watcher(root string, exclueds []string) (w *fsnotify.Watcher) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	ex := []*regexp.Regexp{}
+	for _, e := range exclueds {
+		ex = append(ex, regexp.MustCompile(e))
+	}
+
 	err = filepath.Walk(root, func(path string, info fs.FileInfo, err error) error {
 		if info == nil || info.IsDir() {
 			return nil
+		}
+		for _, r := range ex {
+			if r.MatchString(path) {
+				return nil
+			}
 		}
 		runlog("add : ", path)
 		err = w.Add(path)
@@ -111,7 +138,7 @@ func watch_main(w *fsnotify.Watcher, cmd string, args []string) {
 			if !ok {
 				return
 			}
-			mylog("event:", event)
+			runlog("event:", event)
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				runlog("modified file:", event.Name)
 				execute(cmd, args...)
@@ -132,7 +159,7 @@ func watch_main(w *fsnotify.Watcher, cmd string, args []string) {
 
 func main() {
 	o := parse_option()
-	w := gen_watcher(o.p)
+	w := gen_watcher(o.p, o.e)
 	defer w.Close()
 
 	watch_main(w, o.c, o.a)
