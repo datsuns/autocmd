@@ -11,6 +11,8 @@ import (
 )
 
 const (
+	// s/w somtimes write by "delete and new-write".
+	// we should re-add to fsnotify when watching file removed
 	delayToReadd = time.Millisecond * 200
 )
 
