@@ -10,5 +10,5 @@ func runlog(v ...interface{}) {
 }
 
 func mylog(v ...interface{}) {
-	log.Println(v)
+	log.Println(v...)
 }
