@@ -42,10 +42,7 @@ func gen_watcher(root string, exclueds []string) (w *fsnotify.Watcher) {
 		}
 		runlog("add : ", path)
 		err = w.Add(path)
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -81,8 +78,8 @@ func watch_main(w *fsnotify.Watcher, cmd string, args []string) {
 
 func main() {
 	o := parse_option()
-	w := gen_watcher(o.P, o.E)
+	w := gen_watcher(o.WatchRoot, o.Excludes)
 	defer w.Close()
 
-	watch_main(w, o.C, o.A)
+	watch_main(w, o.Command, o.Args)
 }
