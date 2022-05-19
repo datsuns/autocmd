@@ -1,4 +1,4 @@
-module autocmd
+module github.com/datsuns/autocmd
 
 go 1.17
 
