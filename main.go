@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -50,9 +53,12 @@ func gen_watcher(root string, exclueds []string) (w *fsnotify.Watcher) {
 	return w
 }
 
-func watch_main(w *fsnotify.Watcher, cmd string, args []string) {
+func watch(w *fsnotify.Watcher, cmd string, args []string, cancel chan int) {
 	for {
 		select {
+		case <-cancel:
+			mylog("canceled")
+			return
 		case event, ok := <-w.Events:
 			if !ok {
 				return
@@ -76,10 +82,36 @@ func watch_main(w *fsnotify.Watcher, cmd string, args []string) {
 	}
 }
 
+func watch_main(w *fsnotify.Watcher, cmd string, args []string, cancel chan int, wg *sync.WaitGroup) {
+	go func() {
+		watch(w, cmd, args, cancel)
+		wg.Done()
+	}()
+}
+
 func main() {
 	o := parse_option()
 	w := gen_watcher(o.WatchRoot, o.Excludes)
 	defer w.Close()
 
-	watch_main(w, o.Command, o.Args)
+	cancel := make(chan int)
+	wg := &sync.WaitGroup{}
+
+	wg.Add(1)
+	watch_main(w, o.Command, o.Args, cancel, wg)
+	mylog("started")
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		mylog("start reload")
+		cancel <- 1
+		wg.Wait()
+
+		w.Close()
+		w := gen_watcher(o.WatchRoot, o.Excludes)
+		defer w.Close()
+
+		wg.Add(1)
+		watch_main(w, o.Command, o.Args, cancel, wg)
+	}
 }
