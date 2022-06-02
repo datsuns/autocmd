@@ -23,15 +23,28 @@ var (
 	Verbose = false
 )
 
-func gen_watcher(root string, exclueds []string) (w *fsnotify.Watcher) {
+func build_pattern(list []string) []*regexp.Regexp {
+	ret := []*regexp.Regexp{}
+	if len(list) == 0 {
+		return ret
+	}
+
+	for _, s := range list {
+		ret = append(ret, regexp.MustCompile(s))
+	}
+	return ret
+}
+
+func gen_watcher(root string, exclueds []string, targets []string) (w *fsnotify.Watcher) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
 	}
+	tgt := build_pattern(targets)
 
 	ex := []*regexp.Regexp{}
-	for _, e := range exclueds {
-		ex = append(ex, regexp.MustCompile(e))
+	if len(targets) == 0 {
+		ex = build_pattern(exclueds)
 	}
 
 	err = filepath.Walk(root, func(path string, info fs.FileInfo, err error) error {
@@ -43,8 +56,18 @@ func gen_watcher(root string, exclueds []string) (w *fsnotify.Watcher) {
 				return nil
 			}
 		}
-		runlog("add : ", path)
-		err = w.Add(path)
+		if len(tgt) > 0 {
+			for _, r := range tgt {
+				if r.MatchString(path) {
+					runlog("add : ", path)
+					err = w.Add(path)
+					break
+				}
+			}
+		} else {
+			runlog("add : ", path)
+			err = w.Add(path)
+		}
 		return err
 	})
 	if err != nil {
@@ -90,8 +113,11 @@ func watch_main(w *fsnotify.Watcher, cmd string, args []string, cancel chan int,
 }
 
 func main() {
-	o := parse_option()
-	w := gen_watcher(o.WatchRoot, o.Excludes)
+	o, err := parse_option()
+	if err != nil {
+		panic(err)
+	}
+	w := gen_watcher(o.WatchRoot, o.Excludes, o.Targets)
 	defer w.Close()
 
 	cancel := make(chan int)
@@ -108,7 +134,7 @@ func main() {
 		wg.Wait()
 
 		w.Close()
-		w := gen_watcher(o.WatchRoot, o.Excludes)
+		w := gen_watcher(o.WatchRoot, o.Excludes, o.Targets)
 		defer w.Close()
 
 		wg.Add(1)
