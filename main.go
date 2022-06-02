@@ -35,6 +35,15 @@ func build_pattern(list []string) []*regexp.Regexp {
 	return ret
 }
 
+func find_pattern(matchers []*regexp.Regexp, s string) bool {
+	for _, r := range matchers {
+		if r.MatchString(s) {
+			return true
+		}
+	}
+	return false
+}
+
 func gen_watcher(root string, exclueds []string, targets []string) (w *fsnotify.Watcher) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -52,18 +61,13 @@ func gen_watcher(root string, exclueds []string, targets []string) (w *fsnotify.
 		if info == nil || info.IsDir() {
 			return nil
 		}
-		for _, r := range ex {
-			if r.MatchString(path) {
-				return nil
-			}
+		if find_pattern(ex, path) {
+			return nil
 		}
 		if target_specified {
-			for _, r := range tgt {
-				if r.MatchString(path) {
-					runlog("add : ", path)
-					err = w.Add(path)
-					break
-				}
+			if find_pattern(tgt, path) {
+				runlog("add : ", path)
+				err = w.Add(path)
 			}
 		} else {
 			runlog("add : ", path)
