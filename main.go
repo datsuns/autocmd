@@ -41,9 +41,10 @@ func gen_watcher(root string, exclueds []string, targets []string) (w *fsnotify.
 		log.Fatal(err)
 	}
 	tgt := build_pattern(targets)
+	target_specified := len(tgt) > 0
 
 	ex := []*regexp.Regexp{}
-	if len(targets) == 0 {
+	if !target_specified {
 		ex = build_pattern(exclueds)
 	}
 
@@ -56,7 +57,7 @@ func gen_watcher(root string, exclueds []string, targets []string) (w *fsnotify.
 				return nil
 			}
 		}
-		if len(tgt) > 0 {
+		if target_specified {
 			for _, r := range tgt {
 				if r.MatchString(path) {
 					runlog("add : ", path)
