@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"os"
 	"strings"
 )
 
@@ -13,6 +14,8 @@ type Option struct {
 	Args      []string
 	Excludes  []string
 	Targets   []string
+	LogPath   []string
+	Log       *os.File
 }
 
 type arrayFlags []string
@@ -29,12 +32,14 @@ func (a *arrayFlags) Set(value string) error {
 func parse_option() (ret *Option, err error) {
 	var excludes arrayFlags
 	var targets arrayFlags
+
 	ret = &Option{}
 	flag.BoolVar(&ret.Verbose, "v", false, "verbose")
 	flag.StringVar(&ret.WatchRoot, "p", ".", "path to watch")
 	flag.Var(&excludes, "e", "exclude pattern(s). ignored if target pattern specified")
 	flag.Var(&targets, "t", "target pattern(s)")
 	flag.Parse()
+
 	switch flag.NArg() {
 	case 0:
 		return nil, errors.New("command must be set")
