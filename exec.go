@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"os/exec"
@@ -20,8 +21,9 @@ func printer(reader io.ReadCloser, done chan bool) string {
 	return ret
 }
 
-func execute(c string, p ...string) (result string) {
-	mylog(">cmd<", c, ">", p)
+func execute(logf io.Writer, c string, p ...string) (result string) {
+	log.Println(">cmd<", c, ">", p)
+	logf.Write([]byte(fmt.Sprintf(">cmd<%v> %v", c, p)))
 	cmd := exec.Command(c, p...)
 	reader_o, _ := cmd.StdoutPipe()
 	reader_e, _ := cmd.StderrPipe()
@@ -34,7 +36,8 @@ func execute(c string, p ...string) (result string) {
 	<-done_e
 	err := cmd.Wait()
 	if err != nil {
-		mylog(">ERR: ", err)
+		log.Println(">ERR: ", err)
+		logf.Write([]byte(">ERR: " + err.Error() + "\n"))
 	}
 	return result
 }

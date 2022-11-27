@@ -3,19 +3,17 @@ package main
 import (
 	"errors"
 	"flag"
-	"os"
 	"strings"
 )
 
 type Option struct {
 	Verbose   bool
+	LogPath   string
 	WatchRoot string
 	Command   string
 	Args      []string
 	Excludes  []string
 	Targets   []string
-	LogPath   []string
-	Log       *os.File
 }
 
 type arrayFlags []string
@@ -35,6 +33,7 @@ func parse_option() (ret *Option, err error) {
 
 	ret = &Option{}
 	flag.BoolVar(&ret.Verbose, "v", false, "verbose")
+	flag.StringVar(&ret.LogPath, "l", "", "path to log file")
 	flag.StringVar(&ret.WatchRoot, "p", ".", "path to watch")
 	flag.Var(&excludes, "e", "exclude pattern(s). ignored if target pattern specified")
 	flag.Var(&targets, "t", "target pattern(s)")

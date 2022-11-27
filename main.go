@@ -9,6 +9,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	a := NewAutoCommand(o)
+	a, _ := NewAutoCommand(o)
 	a.run()
 }

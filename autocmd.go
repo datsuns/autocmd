@@ -2,7 +2,10 @@ package main
 
 import (
 	"bufio"
+	"fmt"
+	"io"
 	"io/fs"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,12 +25,33 @@ const (
 type AutoCommand struct {
 	watcher *fsnotify.Watcher
 	option  *Option
+	logf    io.Writer
 }
 
-func NewAutoCommand(o *Option) *AutoCommand {
+func NewAutoCommand(o *Option) (*AutoCommand, error) {
 	ret := &AutoCommand{option: o}
-	ret.watcher = genWatcher(o.WatchRoot, o.Excludes, o.Targets)
-	return ret
+	if err := ret.logOpen(); err != nil {
+		return nil, err
+	}
+	ret.watcher = ret.genWatcher(o.WatchRoot, o.Excludes, o.Targets)
+	return ret, nil
+}
+
+func (a *AutoCommand) logOpen() error {
+	var err error
+	if len(a.option.LogPath) > 0 {
+		if a.logf, err = os.Create(a.option.LogPath); err != nil {
+			return err
+		}
+	} else {
+		a.logf = ioutil.Discard
+	}
+	return nil
+}
+
+func (a *AutoCommand) log(s string) {
+	log.Println(s)
+	a.logf.Write([]byte(s + "\n"))
 }
 
 func (a *AutoCommand) run() {
@@ -35,55 +59,56 @@ func (a *AutoCommand) run() {
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
-	watchMain(a.watcher, a.option.Command, a.option.Args, cancel, wg)
-	mylog("started")
+	a.watchMain(a.watcher, a.option.Command, a.option.Args, cancel, wg)
+	a.log("started")
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-		mylog("start reload")
+		a.log("start reload")
 		cancel <- 1
 		wg.Wait()
 
-		w := genWatcher(a.option.WatchRoot, a.option.Excludes, a.option.Targets)
+		w := a.genWatcher(a.option.WatchRoot, a.option.Excludes, a.option.Targets)
 		defer w.Close()
+		a.logOpen()
 
 		wg.Add(1)
-		watchMain(w, a.option.Command, a.option.Args, cancel, wg)
+		a.watchMain(w, a.option.Command, a.option.Args, cancel, wg)
 	}
 }
 
-func watchMain(w *fsnotify.Watcher, cmd string, args []string, cancel chan int, wg *sync.WaitGroup) {
+func (a *AutoCommand) watchMain(w *fsnotify.Watcher, cmd string, args []string, cancel chan int, wg *sync.WaitGroup) {
 	go func() {
-		watch(w, cmd, args, cancel)
+		a.watch(w, cmd, args, cancel)
 		wg.Done()
 	}()
 }
 
-func watch(w *fsnotify.Watcher, cmd string, args []string, cancel chan int) {
+func (a *AutoCommand) watch(w *fsnotify.Watcher, cmd string, args []string, cancel chan int) {
 	for {
 		select {
 		case <-cancel:
-			mylog("canceled")
+			a.log("canceled")
 			return
 		case event, ok := <-w.Events:
 			if !ok {
 				return
 			}
-			runlog("event:", event)
+			a.log(fmt.Sprintf("event:%v", event))
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				runlog("modified file:", event.Name)
-				execute(cmd, args...)
+				a.log(fmt.Sprintf("modified file:%v", event.Name))
+				execute(a.logf, cmd, args...)
 			} else if event.Op&fsnotify.Remove == fsnotify.Remove {
-				runlog("removed file:", event.Name)
+				a.log(fmt.Sprintf("removed file:%v", event.Name))
 				time.Sleep(delayToReadd)
 				w.Add(event.Name)
-				execute(cmd, args...)
+				execute(a.logf, cmd, args...)
 			}
 		case err, ok := <-w.Errors:
 			if !ok {
 				return
 			}
-			mylog("error:", err)
+			a.log(fmt.Sprintf("error:%v", err))
 		}
 	}
 }
@@ -109,7 +134,7 @@ func buildPattern(list []string) []*regexp.Regexp {
 	return ret
 }
 
-func genWatcher(root string, exclueds []string, targets []string) (w *fsnotify.Watcher) {
+func (a *AutoCommand) genWatcher(root string, exclueds []string, targets []string) (w *fsnotify.Watcher) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
@@ -131,11 +156,11 @@ func genWatcher(root string, exclueds []string, targets []string) (w *fsnotify.W
 		}
 		if target_specified {
 			if findPattern(tgt, path) {
-				runlog("add : ", path)
+				a.log("add : " + path)
 				err = w.Add(path)
 			}
 		} else {
-			runlog("add : ", path)
+			a.log("add : " + path)
 			err = w.Add(path)
 		}
 		return err
