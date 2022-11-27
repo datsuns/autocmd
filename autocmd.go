@@ -3,9 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -25,33 +23,17 @@ const (
 type AutoCommand struct {
 	watcher *fsnotify.Watcher
 	option  *Option
-	logf    io.Writer
+	logging *Log
 }
 
 func NewAutoCommand(o *Option) (*AutoCommand, error) {
+	var err error
 	ret := &AutoCommand{option: o}
-	if err := ret.logOpen(); err != nil {
+	if ret.logging, err = NewLog(o.LogPath, Verbose); err != nil {
 		return nil, err
 	}
 	ret.watcher = ret.genWatcher(o.WatchRoot, o.Excludes, o.Targets)
 	return ret, nil
-}
-
-func (a *AutoCommand) logOpen() error {
-	var err error
-	if len(a.option.LogPath) > 0 {
-		if a.logf, err = os.Create(a.option.LogPath); err != nil {
-			return err
-		}
-	} else {
-		a.logf = ioutil.Discard
-	}
-	return nil
-}
-
-func (a *AutoCommand) log(s string) {
-	log.Println(s)
-	a.logf.Write([]byte(s + "\n"))
 }
 
 func (a *AutoCommand) run() {
@@ -60,17 +42,17 @@ func (a *AutoCommand) run() {
 
 	wg.Add(1)
 	a.watchMain(a.watcher, a.option.Command, a.option.Args, cancel, wg)
-	a.log("started")
+	a.logging.Log("started")
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-		a.log("start reload")
+		a.logging.Log("start reload")
 		cancel <- 1
 		wg.Wait()
 
 		w := a.genWatcher(a.option.WatchRoot, a.option.Excludes, a.option.Targets)
 		defer w.Close()
-		a.logOpen()
+		a.logging.Reset()
 
 		wg.Add(1)
 		a.watchMain(w, a.option.Command, a.option.Args, cancel, wg)
@@ -88,27 +70,27 @@ func (a *AutoCommand) watch(w *fsnotify.Watcher, cmd string, args []string, canc
 	for {
 		select {
 		case <-cancel:
-			a.log("canceled")
+			a.logging.Log("canceled")
 			return
 		case event, ok := <-w.Events:
 			if !ok {
 				return
 			}
-			a.log(fmt.Sprintf("event:%v", event))
+			a.logging.RunLog(fmt.Sprintf("event:%v", event))
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				a.log(fmt.Sprintf("modified file:%v", event.Name))
-				execute(a.logf, cmd, args...)
+				a.logging.RunLog(fmt.Sprintf("modified file:%v", event.Name))
+				execute(a.logging.Writer, cmd, args...)
 			} else if event.Op&fsnotify.Remove == fsnotify.Remove {
-				a.log(fmt.Sprintf("removed file:%v", event.Name))
+				a.logging.RunLog(fmt.Sprintf("removed file:%v", event.Name))
 				time.Sleep(delayToReadd)
 				w.Add(event.Name)
-				execute(a.logf, cmd, args...)
+				execute(a.logging.Writer, cmd, args...)
 			}
 		case err, ok := <-w.Errors:
 			if !ok {
 				return
 			}
-			a.log(fmt.Sprintf("error:%v", err))
+			a.logging.Log(fmt.Sprintf("error:%v", err))
 		}
 	}
 }
@@ -156,11 +138,11 @@ func (a *AutoCommand) genWatcher(root string, exclueds []string, targets []strin
 		}
 		if target_specified {
 			if findPattern(tgt, path) {
-				a.log("add : " + path)
+				a.logging.Log("add : " + path)
 				err = w.Add(path)
 			}
 		} else {
-			a.log("add : " + path)
+			a.logging.Log("add : " + path)
 			err = w.Add(path)
 		}
 		return err

@@ -8,12 +8,12 @@ import (
 	"os/exec"
 )
 
-func printer(reader io.ReadCloser, done chan bool) string {
+func printer(logf io.Writer, reader io.ReadCloser, done chan bool) string {
 	ret := ""
 	scanner := bufio.NewScanner(reader)
 	go func() {
 		for scanner.Scan() {
-			log.Printf(scanner.Text())
+			logf.Write([]byte(scanner.Text() + "\n"))
 			ret += scanner.Text() + "\n"
 		}
 		done <- true
@@ -29,8 +29,8 @@ func execute(logf io.Writer, c string, p ...string) (result string) {
 	reader_e, _ := cmd.StderrPipe()
 	done_o := make(chan bool)
 	done_e := make(chan bool)
-	printer(reader_o, done_o)
-	printer(reader_e, done_e)
+	printer(logf, reader_o, done_o)
+	printer(logf, reader_e, done_e)
 	cmd.Start()
 	<-done_o
 	<-done_e
