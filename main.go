@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// s/w somtimes write by "delete and new-write".
+	// s/w somtimes write a file as "delete and new-write".
 	// we should re-add to fsnotify when watching file removed
 	delayToReadd = time.Millisecond * 200
 )
@@ -138,7 +138,6 @@ func main() {
 		cancel <- 1
 		wg.Wait()
 
-		w.Close()
 		w := gen_watcher(o.WatchRoot, o.Excludes, o.Targets)
 		defer w.Close()
 
