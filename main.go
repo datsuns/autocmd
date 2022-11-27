@@ -5,6 +5,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	a, _ := NewAutoCommand(o)
+	a, e := NewAutoCommand(o)
+	if e != nil {
+		panic(e)
+	}
 	a.run()
 }
