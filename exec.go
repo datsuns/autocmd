@@ -13,7 +13,9 @@ func printer(logf io.Writer, reader io.ReadCloser, done chan bool) string {
 	scanner := bufio.NewScanner(reader)
 	go func() {
 		for scanner.Scan() {
-			logf.Write([]byte(scanner.Text() + "\n"))
+			t := scanner.Text()
+			logf.Write([]byte(t + "\n"))
+			log.Println(t)
 			ret += scanner.Text() + "\n"
 		}
 		done <- true
