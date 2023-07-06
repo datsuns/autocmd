@@ -9,6 +9,7 @@ import (
 type Option struct {
 	Verbose   bool
 	LogPath   string
+	ClearLog  bool
 	WatchRoot string
 	Command   string
 	Args      []string
@@ -34,6 +35,7 @@ func parse_option() (ret *Option, err error) {
 	ret = &Option{}
 	flag.BoolVar(&ret.Verbose, "v", false, "verbose")
 	flag.StringVar(&ret.LogPath, "l", "", "path to log file")
+	flag.BoolVar(&ret.ClearLog, "c", false, "clear log on every execution")
 	flag.StringVar(&ret.WatchRoot, "p", ".", "path to watch")
 	flag.Var(&excludes, "e", "exclude pattern(s). ignored if target pattern specified")
 	flag.Var(&targets, "t", "target pattern(s)")

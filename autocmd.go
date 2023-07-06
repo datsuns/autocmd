@@ -76,6 +76,10 @@ func (a *AutoCommand) watch(w *fsnotify.Watcher, cmd string, args []string, canc
 			if !ok {
 				return
 			}
+			if a.option.ClearLog {
+				a.logging.Reset()
+			}
+
 			a.logging.RunLog(fmt.Sprintf("event:%v", event))
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				a.logging.RunLog(fmt.Sprintf("modified file:%v", event.Name))
