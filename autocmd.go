@@ -129,9 +129,7 @@ func (a *AutoCommand) genWatcher(root string, exclueds []string, targets []strin
 	target_specified := len(tgt) > 0
 
 	ex := []*regexp.Regexp{}
-	if !target_specified {
-		ex = buildPattern(exclueds)
-	}
+	ex = buildPattern(exclueds)
 
 	err = filepath.Walk(root, func(path string, info fs.FileInfo, err error) error {
 		if info == nil || info.IsDir() {
